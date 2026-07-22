@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>凪スピリッツ 店舗配置ツール v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#1a1614; --paper:#f7f4ef; --card:#fff; --line:#e3ddd3;
+  --broth:#b5651d; --broth-dark:#8a4a12; --broth-soft:#f3e6d6;
+  --nori:#2d3b36; --accent:#c9302c; --muted:#8a8178; --ok:#2f7d4f;
+  --shadow:0 1px 3px rgba(40,30,20,.08),0 4px 12px rgba(40,30,20,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+  background:var(--paper);color:var(--ink);line-height:1.5;font-size:14px}
+header{background:var(--nori);color:#f7f4ef;padding:14px 20px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:17px;font-weight:800;letter-spacing:.04em}
+header .sub{font-size:11px;opacity:.7}
+.toolbar{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--broth);color:#fff;border:none;padding:8px 14px;border-radius:7px;
+  font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+.btn:hover{background:var(--broth-dark)}
+.search{padding:7px 12px;border-radius:7px;border:1px solid var(--line);font-size:13px;width:160px;font-family:inherit}
+.wrap{padding:18px 20px 60px}
+.hint{background:var(--broth-soft);border:1px solid #e6d3bc;border-radius:9px;
+  padding:11px 15px;font-size:12.5px;color:#6b4a22;margin-bottom:14px;display:flex;gap:9px;align-items:flex-start}
+.hint b{color:var(--broth-dark)}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 15px;box-shadow:var(--shadow)}
+.stat .n{font-size:20px;font-weight:800;color:var(--broth)}
+.stat .l{font-size:11px;color:var(--muted);font-weight:600}
+.area-block{margin-bottom:20px;border:1px solid var(--line);border-radius:12px;background:#fbf9f5;padding:12px;transition:.12s}
+.area-block.dragover{border-color:var(--broth);border-width:2px;background:var(--broth-soft)}
+.area-title{font-size:14px;font-weight:800;color:var(--nori);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;padding-left:2px}
+.area-title .tag{font-size:10px;font-weight:700;color:#fff;background:var(--nori);padding:2px 8px;border-radius:20px}
+.area-title .cnt{font-size:11px;color:var(--muted);font-weight:600}
+.stores{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.store{background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow);
+  overflow:hidden;display:flex;flex-direction:column}
+.store.nokencho{border-color:var(--accent);border-width:2px}
+.store-head{padding:8px 11px;background:linear-gradient(0deg,#faf7f2,#fff);border-bottom:1px solid var(--broth-soft);
+  cursor:grab;display:flex;align-items:center;gap:6px}
+.store-head:active{cursor:grabbing}
+.store-head .grip{color:var(--muted);font-size:12px;flex:none}
+.store-head .sn{font-size:13.5px;font-weight:800;flex:1}
+.store-head .cap{font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;flex:none}
+.cap.ok{background:#e8f3ec;color:var(--ok)}
+.cap.short{background:#fdecea;color:var(--accent)}
+.cap.over{background:#fdf1e3;color:var(--broth-dark)}
+.nokencho-badge{background:var(--accent);color:#fff;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;margin:6px 11px 0}
+.slots{padding:9px 11px;display:flex;flex-direction:column;gap:6px;flex:1}
+.slot-group{display:flex;flex-direction:column;gap:4px}
+.slot-label{font-size:9.5px;font-weight:800;color:var(--muted);letter-spacing:.05em}
+.role-slot{border:1.5px dashed var(--line);border-radius:7px;min-height:34px;padding:3px;display:flex;flex-direction:column;gap:3px;transition:.12s}
+.role-slot.dragover{border-color:var(--broth);border-style:solid;background:var(--broth-soft)}
+.role-slot.empty-key{border-color:#f0c9c5;background:#fdf6f5}
+.slot-empty-txt{font-size:10px;color:#c9a9a5;text-align:center;padding:6px 0;font-weight:600}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:5px 8px;
+  cursor:grab;transition:.12s;display:flex;align-items:center;gap:6px;position:relative}
+.card:hover{border-color:var(--broth);background:#fff}
+.card:active{cursor:grabbing}
+.card.dragging{opacity:.4}
+.card .eid{font-size:9px;font-weight:700;color:#fff;background:var(--muted);padding:1px 5px;border-radius:4px;flex:none;min-width:34px;text-align:center}
+.card .eid.none{background:#d9d2c8;color:#9a9186}
+.card .nm{font-size:12px;font-weight:700}
+.card .gp{font-size:10px;color:var(--muted);margin-left:auto}
+.card.hl{outline:2px solid var(--broth);outline-offset:1px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--nori);color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:600;
+  box-shadow:var(--shadow);transition:.28s;z-index:200;opacity:0}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+@media(max-width:600px){.stores{grid-template-columns:1fr}.search{width:100px}header h1{font-size:15px}}
+
+.store-head .del{color:var(--muted);font-size:14px;flex:none;cursor:pointer;padding:0 2px;border-radius:4px;line-height:1}
+.store-head .del:hover{color:var(--accent);background:#fdecea}
+.add-person{margin:2px 11px 10px;border:1.5px dashed var(--line);border-radius:7px;
+  background:none;color:var(--muted);font-size:11px;font-weight:700;padding:5px;cursor:pointer;
+  width:calc(100% - 22px);font-family:inherit;transition:.12s}
+.add-person:hover{border-color:var(--broth);color:var(--broth);background:var(--broth-soft)}
+.modal-bg{position:fixed;inset:0;background:rgba(26,22,20,.45);z-index:300;display:none;
+  align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:13px;padding:22px;width:100%;max-width:400px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.modal h3{font-size:16px;font-weight:800;margin-bottom:14px;color:var(--nori)}
+.modal label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin:9px 0 3px}
+.modal input,.modal select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;
+  font-size:13px;font-family:inherit}
+.modal-btns{display:flex;gap:8px;margin-top:18px}
+.modal-btns .btn{flex:1;justify-content:center}
+.btn.gray{background:#e8e2d8;color:var(--ink)}
+.btn.gray:hover{background:#ddd5c8}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>凪スピリッツ 店舗配置ツール</h1>
+    <div class="sub">役職の枠にドラッグ ／ 店舗ごとエリア移動 ／ 社員番号つき</div>
+  </div>
+  <div class="toolbar">
+    <input class="search" id="search" placeholder="名前・番号で検索…">
+    <button class="btn" id="addStore">＋店舗を追加</button>
+    <label class="btn" style="cursor:pointer" for="importFile">配置表を取込</label>
+    <input type="file" id="importFile" accept=".xlsx" style="display:none">
+    <button class="btn" id="exportPlace">配置表を出力</button>
+  </div>
+</header>
+<div class="wrap">
+  <div class="hint"><span>💡</span>
+  <div><b>使い方：</b>①人カードを<b>役職の枠</b>にドラッグ＝役職変更・店舗移動。
+  ②<b>店舗の見出し（⣿）</b>をつかんでエリアにドラッグ＝店舗ごと移動。
+  ③<b>人カードをクリック</b>＝名前・番号・役職の編集や削除。各店舗の<b>＋人を追加</b>／店舗見出しの<b>✕</b>で店舗削除。
+  <b>保存は「配置表を出力」→ 次回「配置表を取込」で続き。</b> 赤枠＝店主未定。</div></div>
+  <div class="stats" id="stats"></div>
+  <div id="board"></div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modal"></div>
+</div>
+<script>
+const STORE_DATA = [{"row": 3, "bucho": "花山部長", "area": "佐藤洋行", "store": "神田ちえちゃん", "teiin": "6.0", "section": "通常", "members": [{"pos": "店主", "name": "アウンザーウー", "empid": "2445", "group": "2G", "note": "店研"}, {"pos": "副店主", "name": "メイレッソウ", "empid": "2450", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "カイニンワイ", "empid": "3006", "group": "", "note": ""}, {"pos": "社員", "name": "チョーテッルイン", "empid": "3322", "group": "", "note": ""}, {"pos": "社員", "name": "タジンカイン", "empid": "3353", "group": "", "note": ""}]}, {"row": 4, "bucho": "花山部長", "area": "佐藤洋行", "store": "田町えっちゃん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "チャンピェィソン", "empid": "2460", "group": "1.5G", "note": "店研・副研"}, {"pos": "副店主", "name": "エイエイモン", "empid": "2544", "group": "1G", "note": "トレーナー"}, {"pos": "社員", "name": "チイソーリン", "empid": "3007", "group": "1G", "note": ""}, {"pos": "社員", "name": "アウンコーコーニェイン", "empid": "3377", "group": "", "note": ""}, {"pos": "社員", "name": "越坂部崇仁", "empid": "2396", "group": "", "note": ""}]}, {"row": 5, "bucho": "花山部長", "area": "佐藤洋行", "store": "虎ノ門たきちゃん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "ニマデシスカヤンティ", "empid": "2431", "group": "2G", "note": "特２・副研・店主"}, {"pos": "副店主", "name": "ファンヴァンクオン", "empid": "2376", "group": "1.5G", "note": "特２・副研"}, {"pos": "社員", "name": "アウンミョーヘイン", "empid": "3262", "group": "1G", "note": "4/1新入社員"}, {"pos": "社員", "name": "ソーミインタン", "empid": "3324", "group": "1G", "note": "4/1新入社員"}, {"pos": "社員", "name": "グエンテイホンハン", "empid": "3354", "group": "", "note": ""}]}, {"row": 6, "bucho": "花山部長", "area": "佐藤洋行", "store": "新橋はるちゃん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "ソーサンダーアウン", "empid": "2545", "group": "1G", "note": "副研・店主"}, {"pos": "社員", "name": "ヤミンカィントゥーテット", "empid": "3122", "group": "", "note": ""}]}, {"row": 7, "bucho": "花山部長", "area": "佐藤洋行", "store": "浅草生田庵", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "管原裕一郎", "empid": "1875", "group": "2G", "note": "店研"}, {"pos": "副店主", "name": "スエジンウィン", "empid": "2305", "group": "", "note": ""}, {"pos": "社員", "name": "トンナイーウー", "empid": "2577", "group": "1G", "note": ""}, {"pos": "社員", "name": "サンリントウ", "empid": "3279", "group": "1G", "note": ""}]}, {"row": 8, "bucho": "花山部長", "area": "リュウ", "store": "新橋ニューともちん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "上野朱美", "empid": "2188", "group": "2G", "note": "店研"}, {"pos": "社員", "name": "ムハマドユディ", "empid": "3241", "group": "1G", "note": "3/9入社"}]}, {"row": 9, "bucho": "花山部長", "area": "リュウ", "store": "神保町ニューともちん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "宋青雲", "empid": "2459", "group": "1.5G", "note": ""}, {"pos": "副店主", "name": "エーミャッノー", "empid": "2642", "group": "1G", "note": ""}, {"pos": "社員", "name": "アセップモハマドソレフディン", "empid": "3077", "group": "1G", "note": ""}, {"pos": "社員", "name": "テッテーゾー", "empid": "3280", "group": "", "note": ""}, {"pos": "社員", "name": "エーチャンモー", "empid": "3219", "group": "1G", "note": ""}]}, {"row": 10, "bucho": "花山部長", "area": "リュウ", "store": "川崎駅前ニューともちん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "プンビマル", "empid": "2058", "group": "2G", "note": "特2・副研"}, {"pos": "社員", "name": "テインタントー", "empid": "3173", "group": "1G", "note": ""}, {"pos": "社員", "name": "リオアグンプルノモ", "empid": "3220", "group": "1G", "note": ""}, {"pos": "社員", "name": "タマンスニル", "empid": "3217", "group": "1G", "note": ""}]}, {"row": 11, "bucho": "花山部長", "area": "リュウ", "store": "蒲田西口ニューともちん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "アウンニェインチャン", "empid": "2444", "group": "2G", "note": "店研"}, {"pos": "副店主", "name": "ヘイマーイ", "empid": "2480", "group": "1G", "note": ""}, {"pos": "社員", "name": "グエンティイエン", "empid": "3259", "group": "", "note": ""}, {"pos": "社員", "name": "ティンザーウー", "empid": "3278", "group": "", "note": "神田ヘルプ"}]}, {"row": 12, "bucho": "花山部長", "area": "リュウ", "store": "五反田ニューともちん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "ファムバンチュオン", "empid": "2416", "group": "2G", "note": "特2・店研・副研"}, {"pos": "副店主", "name": "ジンリン", "empid": "2385", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "テディクルニアワン", "empid": "3081", "group": "1G", "note": "1月入社"}, {"pos": "社員", "name": "ピティ", "empid": "3174", "group": "1G", "note": "２月入社"}, {"pos": "社員", "name": "グエンテイニャットリエン", "empid": "3176", "group": "1G", "note": ""}]}, {"row": 13, "bucho": "花山部長", "area": "リュウ", "store": "池袋2号店ニューともちん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "テースミャッリン", "empid": "2387", "group": "2G", "note": "特２・副研"}, {"pos": "副店主", "name": "ミンチッウー", "empid": "2479", "group": "1G", "note": ""}, {"pos": "社員", "name": "ジョンウェスリナピトゥプル", "empid": "3372", "group": "", "note": ""}, {"pos": "社員", "name": "エインチェーシンリン", "empid": "3410", "group": "", "note": ""}]}, {"row": 14, "bucho": "花山部長", "area": "佐藤覚也", "store": "池袋ひろちゃん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "中村祐介", "empid": "2234", "group": "2G", "note": "店研"}, {"pos": "副店主", "name": "メィーラピェリンー", "empid": "2643", "group": "1G", "note": ""}, {"pos": "社員", "name": "イェミンタン", "empid": "2399", "group": "1G", "note": ""}, {"pos": "社員", "name": "フウプツンツテー", "empid": "3216", "group": "1G", "note": "３月入社"}, {"pos": "社員", "name": "ディマスアグンワヒュヌグロホ", "empid": "3123", "group": "", "note": "降旗"}]}, {"row": 15, "bucho": "花山部長", "area": "佐藤覚也", "store": "高田馬場なぎちゃん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "神元啓", "empid": "2418", "group": "2G", "note": ""}, {"pos": "社員", "name": "グエンミンヒエン", "empid": "2453", "group": "1G", "note": "特2"}, {"pos": "社員", "name": "エーエーニェイン", "empid": "3121", "group": "1G", "note": "1月入社"}]}, {"row": 16, "bucho": "花山部長", "area": "佐藤覚也", "store": "江古田なぎちゃん", "teiin": "３", "section": "通常", "members": [{"pos": "店主", "name": "チャンタインハイ", "empid": "2404", "group": "2G", "note": "特2・副研"}, {"pos": "副店主", "name": "平倉佑樹", "empid": "2000", "group": "2G", "note": ""}, {"pos": "社員", "name": "リナルスバンディヤニ", "empid": "2842", "group": "1G", "note": ""}, {"pos": "社員", "name": "チュディンチュン", "empid": "3177", "group": "1G", "note": "２月入社"}]}, {"row": 17, "bucho": "花山部長", "area": "佐藤覚也", "store": "駒込", "teiin": "", "section": "通常", "members": []}, {"row": 18, "bucho": "花山部長", "area": "佐藤覚也", "store": "成城", "teiin": "", "section": "通常", "members": []}, {"row": 19, "bucho": "川上部長", "area": "鈴木涼太", "store": "両国邦ちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "タン", "empid": "2375.0", "group": "2G", "note": ""}, {"pos": "社員", "name": "ラッモーミィン", "empid": "3080", "group": "1G", "note": ""}, {"pos": "社員", "name": "フォートウーワイ", "empid": "3218", "group": "1G", "note": "３月入社"}, {"pos": "社員", "name": "タラアピートゥン", "empid": "3294", "group": "", "note": ""}]}, {"row": 20, "bucho": "川上部長", "area": "鈴木涼太", "store": "浅草橋なぎちゃん", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "ミャッミャッモン", "empid": "2414", "group": "1G", "note": "特2・副研"}, {"pos": "副店主", "name": "ジャトッピ", "empid": "2594", "group": "1G", "note": ""}, {"pos": "社員", "name": "メイジンピョー", "empid": "3260", "group": "1G", "note": "4/1新入社員"}, {"pos": "社員", "name": "リンタンマン", "empid": "3281", "group": "", "note": ""}]}, {"row": 21, "bucho": "川上部長", "area": "鈴木涼太", "store": "錦糸町なぎちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "テインテインスエ", "empid": "2390", "group": "2G", "note": "特２・店研・副研"}, {"pos": "副店主", "name": "スレーウェイナイー", "empid": "2449", "group": "1G", "note": "特2"}, {"pos": "社員", "name": "アウンテインウー", "empid": "3026", "group": "1G", "note": ""}, {"pos": "社員", "name": "ミンミンナイン", "empid": "3352", "group": "", "note": "5/1入社"}]}, {"row": 22, "bucho": "川上部長", "area": "鈴木涼太", "store": "新小岩邦ちゃん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "中田昭之助", "empid": "2292", "group": "2G", "note": ""}, {"pos": "副店主", "name": "レッレッカイン", "empid": "2478", "group": "1G", "note": ""}, {"pos": "社員", "name": "ドーテイハイイェン", "empid": "3276", "group": "1G", "note": ""}]}, {"row": 23, "bucho": "川上部長", "area": "鈴木涼太", "store": "行徳なぎちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "スエスエウィン", "empid": "2356", "group": "2G", "note": "特2・店研・副研"}, {"pos": "副店主", "name": "モハマドデデイルファンディ", "empid": "2392", "group": "1G", "note": ""}, {"pos": "社員", "name": "チャンチンファット", "empid": "3159", "group": "1G", "note": "1月入社"}, {"pos": "社員", "name": "二エイン二エインパイン", "empid": "3242", "group": "1G", "note": "3/9入社"}]}, {"row": 24, "bucho": "川上部長", "area": "鈴木涼太", "store": "西船橋", "teiin": "", "section": "通常", "members": []}, {"row": 25, "bucho": "川上部長", "area": "フォン", "store": "中野邦ちゃん", "teiin": "３", "section": "通常", "members": [{"pos": "店主", "name": "チェリーピョウエ", "empid": "2355", "group": "2G", "note": "特２"}, {"pos": "副店主", "name": "カンジンティハ", "empid": "3078", "group": "1G", "note": ""}, {"pos": "社員", "name": "テインテイントゥエ", "empid": "3355", "group": "", "note": "５/1新入社員"}]}, {"row": 26, "bucho": "川上部長", "area": "フォン", "store": "高円寺ともちん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "スミャッティンザソー", "empid": "2435", "group": "2G", "note": "店研"}, {"pos": "社員", "name": "イテルイン", "empid": "3125", "group": "1G", "note": ""}, {"pos": "社員", "name": "エーサンダーリン", "empid": "3277", "group": "", "note": "シュエ ジン ピョ"}]}, {"row": 27, "bucho": "川上部長", "area": "フォン", "store": "西荻なぎちゃん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "一ノ瀬太貴", "empid": "2235", "group": "2G", "note": ""}, {"pos": "副店主", "name": "シュンレッタウオター", "empid": "3079", "group": "1G", "note": ""}]}, {"row": 28, "bucho": "川上部長", "area": "フォン", "store": "八王子", "teiin": "", "section": "通常", "members": [{"pos": "店主", "name": "ユサンダーキン", "empid": "2293", "group": "2G", "note": "特2・店研・副研"}, {"pos": "副店主", "name": "ナンテッテッエー", "empid": "2386", "group": "", "note": ""}, {"pos": "社員", "name": "ピィピョーアウン", "empid": "3157", "group": "1月入社", "note": ""}, {"pos": "社員", "name": "ミンカントウーモー", "empid": "3175", "group": "1G", "note": "２月入社"}, {"pos": "社員", "name": "ウィンウィンテ", "empid": "3264", "group": "渋谷", "note": ""}]}, {"row": 29, "bucho": "川上部長", "area": "フォン", "store": "東高円寺", "teiin": "", "section": "通常", "members": [{"pos": "店主", "name": "ベキムタン", "empid": "2546", "group": "2G", "note": ""}, {"pos": "副店主", "name": "クアックゴックハ", "empid": "3243", "group": "1G", "note": ""}, {"pos": "社員", "name": "タンダーリン", "empid": "3379", "group": "", "note": ""}]}, {"row": 30, "bucho": "川上部長", "area": "渡部 雅大", "store": "渋谷かっちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "ミンティケチャン", "empid": "1915", "group": "2G", "note": "特２・店研"}, {"pos": "副店主", "name": "キンサペーウー", "empid": "2481", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "ラナ", "empid": "2890.0", "group": "1G", "note": ""}, {"pos": "社員", "name": "テースーウィッイー", "empid": "3282", "group": "", "note": ""}, {"pos": "社員", "name": "シーテゥーピョー", "empid": "3321", "group": "", "note": ""}]}, {"row": 31, "bucho": "川上部長", "area": "渡部 雅大", "store": "白楽なぎちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "カデックアユラクスミインドラワティ", "empid": "2432", "group": "2G", "note": "副研"}, {"pos": "副店主", "name": "ワイヤンミンカン", "empid": "2311", "group": "", "note": ""}, {"pos": "社員", "name": "ロッジャアウン", "empid": "3261", "group": "1G", "note": "4/1新入社員"}]}, {"row": 32, "bucho": "川上部長", "area": "渡部 雅大", "store": "元住吉なぎちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "ミャッミントン", "empid": "2407", "group": "2G", "note": "特2・店研・副研"}, {"pos": "副店主", "name": "イシュエカイン", "empid": "2477", "group": "", "note": ""}, {"pos": "社員", "name": "シトウミョーテッ", "empid": "3293", "group": "", "note": ""}]}, {"row": 33, "bucho": "川上部長", "area": "渡部 雅大", "store": "青葉台", "teiin": "", "section": "通常", "members": []}, {"row": 34, "bucho": "川上部長", "area": "渡部 雅大", "store": "高座渋谷", "teiin": "", "section": "通常", "members": []}, {"row": 35, "bucho": "大塚部長", "area": "チュン", "store": "西新宿凪", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "田中綜一郎", "empid": "2365", "group": "1G", "note": "副研・店主研修"}, {"pos": "副店主", "name": "スイーウインレッ", "empid": "2476", "group": "1G", "note": "副研"}]}, {"row": 36, "bucho": "大塚部長", "area": "チュン", "store": "小滝橋クマちゃん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "イティンザーボ", "empid": "2433", "group": "1G", "note": "特2"}, {"pos": "社員", "name": "エイミーミーハン", "empid": "3283", "group": "", "note": ""}]}, {"row": 37, "bucho": "大塚部長", "area": "チュン", "store": "新宿ナギチャン", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "鈴木亮太郎", "empid": "2508", "group": "2G", "note": "副研・"}, {"pos": "副店主", "name": "ニーミンカン", "empid": "2427", "group": "", "note": "特2・副研"}, {"pos": "社員", "name": "アウンティッゾー", "empid": "2384", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "レードン", "empid": "2403", "group": "1G", "note": "特2"}]}, {"row": 38, "bucho": "大塚部長", "area": "チュン", "store": "新宿シンちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "エインドラ―ママ", "empid": "2391", "group": "2G", "note": "特２・副研"}, {"pos": "副店主", "name": "サンウェーニン", "empid": "2641", "group": "", "note": ""}, {"pos": "社員", "name": "アーカーモー", "empid": "3295", "group": "", "note": ""}]}, {"row": 39, "bucho": "大塚部長", "area": "チュン", "store": "新橋えっちゃん", "teiin": "４", "section": "通常", "members": [{"pos": "店主", "name": "石田頌", "empid": "862", "group": "2G", "note": ""}, {"pos": "副店主", "name": "川井英裕", "empid": "2236", "group": "1G", "note": ""}, {"pos": "社員", "name": "ヘインテット", "empid": "3221", "group": "1G", "note": "３月入社"}, {"pos": "社員", "name": "ピョーイズィン", "empid": "3375", "group": "", "note": ""}]}, {"row": 40, "bucho": "大塚部長", "area": "チュン", "store": "渋谷豚王", "teiin": "１", "section": "通常", "members": [{"pos": "店主", "name": "グエンコンザン", "empid": "1934", "group": "2G", "note": "特２"}]}, {"row": 41, "bucho": "大塚部長", "area": "花井 庸介", "store": "大森なぎちゃん", "teiin": "3.0", "section": "通常", "members": [{"pos": "店主", "name": "三輪昌史", "empid": "2483", "group": "1G", "note": "副研"}, {"pos": "副店主", "name": "ピィピョートー", "empid": "2455", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "ウェイウェイルイン", "empid": "2454", "group": "1G", "note": "副研・店主研修"}, {"pos": "社員", "name": "タネットダンクマリ", "empid": "3158", "group": "1G", "note": "4/1新入社員"}]}, {"row": 42, "bucho": "大塚部長", "area": "花井 庸介", "store": "川口トラちゃん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "アグススディルマン", "empid": "2448", "group": "2G", "note": "特2・副研"}, {"pos": "社員", "name": "ヘインテッゾー", "empid": "3124", "group": "1G", "note": ""}, {"pos": "社員", "name": "エミルクリシチアワン", "empid": "3414", "group": "", "note": ""}]}, {"row": 43, "bucho": "大塚部長", "area": "花井 庸介", "store": "蒲田煮干王", "teiin": "1.0", "section": "通常", "members": [{"pos": "店主", "name": "ダオホアンニャット", "empid": "2294", "group": "1G", "note": "特2・副研"}]}, {"row": 44, "bucho": "大塚部長", "area": "花井 庸介", "store": "大宮凪", "teiin": "５", "section": "通常", "members": [{"pos": "店主", "name": "小林佳代子", "empid": "371", "group": "2G", "note": ""}, {"pos": "副店主", "name": "ヌェイズインリン", "empid": "2169", "group": "1G", "note": ""}, {"pos": "社員", "name": "ウインテイリナイン", "empid": "3083", "group": "", "note": ""}, {"pos": "社員", "name": "サンダーミィン", "empid": "3297", "group": "", "note": ""}, {"pos": "社員", "name": "サイウンナトゥン", "empid": "3378", "group": "", "note": "ヘイン モー ゾー"}]}, {"row": 45, "bucho": "大塚部長", "area": "花井 庸介", "store": "川崎 2号店", "teiin": "4.0", "section": "通常", "members": [{"pos": "店主", "name": "森田", "empid": "718.0", "group": "2G", "note": "店研"}, {"pos": "副店主", "name": "テッミャッマウン", "empid": "2467", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "グェンティタオ", "empid": "3296", "group": "", "note": ""}, {"pos": "社員", "name": "グエンテイタイン", "empid": "3325", "group": "", "note": ""}, {"pos": "社員", "name": "グェージンター", "empid": "3263", "group": "", "note": ""}]}, {"row": 46, "bucho": "大塚部長", "area": "花井 庸介", "store": "新杉田", "teiin": "４", "section": "通常", "members": [{"pos": "店主", "name": "ルディカエルラー", "empid": "2426", "group": "", "note": ""}, {"pos": "社員", "name": "ケイカインリン", "empid": "3320", "group": "", "note": ""}, {"pos": "社員", "name": "ナンダーアウン", "empid": "3376", "group": "", "note": ""}]}, {"row": 47, "bucho": "大塚部長", "area": "営業部外", "store": "ラーメン凪 ゴールデン街店本館", "teiin": "４", "section": "通常", "members": [{"pos": "店主", "name": "小林敦", "empid": "5", "group": "", "note": ""}, {"pos": "副店主", "name": "大曽根悠二郎", "empid": "7", "group": "", "note": ""}, {"pos": "社員", "name": "小林", "empid": "5.0", "group": "", "note": ""}, {"pos": "社員", "name": "阿部寛", "empid": "179", "group": "", "note": ""}]}, {"row": 48, "bucho": "大塚部長", "area": "営業部外", "store": "銀座はるちゃん", "teiin": "2.0", "section": "通常", "members": [{"pos": "店主", "name": "小林敦", "empid": "5", "group": "", "note": ""}, {"pos": "社員", "name": "野口晴子", "empid": "", "group": "‐", "note": "女将"}]}, {"row": 49, "bucho": "大塚部長", "area": "営業部外", "store": "田町油そばセンター", "teiin": "１", "section": "通常", "members": [{"pos": "店主", "name": "大里健太郎", "empid": "181", "group": "4G", "note": ""}, {"pos": "副店主", "name": "山村清和", "empid": "2098", "group": "2G", "note": ""}]}, {"row": 50, "bucho": "大塚部長", "area": "営業部外", "store": "渋谷 我ガ", "teiin": "1.0", "section": "通常", "members": [{"pos": "店主", "name": "小松優作", "empid": "174", "group": "4G", "note": ""}, {"pos": "副店主", "name": "小川健", "empid": "180", "group": "2G", "note": ""}]}, {"row": 53, "bucho": "研修・オープン予定", "area": "営業部外", "store": "八王子", "teiin": "5.0", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "ユサンダーキン", "empid": "2293", "group": "1.5G", "note": "特2・店研・副研"}, {"pos": "副店主", "name": "ナンテッテッエー", "empid": "2386", "group": "", "note": ""}, {"pos": "社員", "name": "ピィピョーアウン", "empid": "3157", "group": "1月入社", "note": ""}, {"pos": "社員", "name": "ウィンウィンテ", "empid": "3264", "group": "渋谷", "note": ""}, {"pos": "社員", "name": "ミンカントウーモー", "empid": "3175", "group": "1G", "note": "２月入社"}]}, {"row": 54, "bucho": "研修・オープン予定", "area": "営業部外", "store": "川崎２　錦糸町より少し広め　A”", "teiin": "4.0", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "森田", "empid": "718.0", "group": "2G", "note": "店研"}, {"pos": "副店主", "name": "テッミャッマウン", "empid": "2467", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "グェンティタオ", "empid": "3296", "group": "", "note": ""}, {"pos": "社員", "name": "グエンテイタイン", "empid": "3325", "group": "", "note": ""}]}, {"row": 55, "bucho": "研修・オープン予定", "area": "営業部外", "store": "東高円寺", "teiin": "3.0", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "ベキムタン", "empid": "2546", "group": "1.5G", "note": ""}, {"pos": "副店主", "name": "クアックゴックハ", "empid": "3243", "group": "1G", "note": ""}, {"pos": "社員", "name": "タンダーリン", "empid": "3379", "group": "", "note": ""}, {"pos": "社員", "name": "横山倫也", "empid": "3351", "group": "", "note": ""}]}, {"row": 56, "bucho": "研修・オープン予定", "area": "営業部外", "store": "本八幡", "teiin": "", "section": "研修・オープン予定", "members": []}, {"row": 57, "bucho": "研修・オープン予定", "area": "営業部外", "store": "西船橋", "teiin": "4.0", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "メイトゥチョー", "empid": "2405", "group": "1.5G", "note": "副研"}, {"pos": "副店主", "name": "テッターサン", "empid": "2168", "group": "1.5G", "note": "特2・副研・店主"}, {"pos": "社員", "name": "ドミニクスジャービスジョンスチノ", "empid": "3373", "group": "", "note": ""}, {"pos": "社員", "name": "アウンニェインチャン", "empid": "3374", "group": "", "note": ""}]}, {"row": 58, "bucho": "研修・オープン予定", "area": "営業部外", "store": "成城", "teiin": "", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "カイタジントゥン", "empid": "2644", "group": "1G", "note": ""}]}, {"row": 59, "bucho": "研修・オープン予定", "area": "営業部外", "store": "高座渋谷　新業態", "teiin": "3.0", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "矢島歩武", "empid": "2892", "group": "1G", "note": ""}, {"pos": "副店主", "name": "タンテイゴックホア", "empid": "3178", "group": "1G", "note": "２月入社"}]}, {"row": 60, "bucho": "研修・オープン予定", "area": "営業部外", "store": "駒込 新業態", "teiin": "３", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "入江周杜", "empid": "2291", "group": "", "note": ""}, {"pos": "社員", "name": "越坂部崇仁", "empid": "2396", "group": "", "note": ""}]}, {"row": 61, "bucho": "研修・オープン予定", "area": "営業部外", "store": "新杉田", "teiin": "４", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "ルディカエルラー", "empid": "2426", "group": "", "note": ""}, {"pos": "社員", "name": "ケイカインリン", "empid": "3320", "group": "", "note": ""}, {"pos": "社員", "name": "ナンダーアウン", "empid": "3376", "group": "", "note": ""}]}, {"row": 62, "bucho": "研修・オープン予定", "area": "営業部外", "store": "川越", "teiin": "", "section": "研修・オープン予定", "members": []}, {"row": 63, "bucho": "研修・オープン予定", "area": "営業部外", "store": "池袋２ニューとも", "teiin": "3.0", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "テースミャッリン", "empid": "2387", "group": "2G", "note": "特２・副研"}, {"pos": "副店主", "name": "ミンチッウー", "empid": "2479", "group": "1G", "note": "トレーナー"}, {"pos": "社員", "name": "ジョンウェスリナピトゥプル", "empid": "3372", "group": "", "note": ""}, {"pos": "社員", "name": "エインチェーシンリン", "empid": "3410", "group": "", "note": ""}]}, {"row": 64, "bucho": "研修・オープン予定", "area": "営業部外", "store": "五反田", "teiin": "４", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "ファムバンチュオン", "empid": "2416", "group": "1.5G", "note": "特2・店研・副研"}, {"pos": "副店主", "name": "ジンリン", "empid": "2385", "group": "1G", "note": "副研"}, {"pos": "社員", "name": "テディクルニアワン", "empid": "3081", "group": "1月入社", "note": "〇"}, {"pos": "社員", "name": "ピティ", "empid": "3174", "group": "1G", "note": "２月入社"}, {"pos": "社員", "name": "グエンテイニャットリエン", "empid": "3176", "group": "1G", "note": "２月入社"}]}, {"row": 65, "bucho": "研修・オープン予定", "area": "営業部外", "store": "青葉台　馬場スタイル　30席　新業態", "teiin": "", "section": "研修・オープン予定", "members": []}, {"row": 67, "bucho": "研修・オープン予定", "area": "営業部外", "store": "1000~", "teiin": "", "section": "研修・オープン予定", "members": [{"pos": "店主", "name": "店主プログラム", "empid": "", "group": "店プ", "note": ""}]}, {"row": 68, "bucho": "研修・オープン予定", "area": "営業部外", "store": "成文化が必要", "teiin": "", "section": "研修・オープン予定", "members": []}];</script>
+<script>
+let stores = STORE_DATA.map((s,i)=>({...s, _id:i, members:s.members.map(m=>({...m}))}));
+const BUCHO_ORDER=['花山部長','川上部長','大塚部長','研修・オープン予定'];
+
+function num(x){ if(x==null)return null; x=String(x).trim();
+  x=x.replace(/[０-９．]/g,d=>'0123456789.'['０１２３４５６７８９．'.indexOf(d)]);
+  const n=parseFloat(x); return isNaN(n)?null:n; }
+
+// エリアキー：通常は「部長 / エリア」、研修等はセクション名
+function areaKey(s){ return s.section==='通常' ? (s.bucho+' ／ '+(s.area||'（エリア未設定）')) : s.section; }
+
+function render(){
+  const board=document.getElementById('board'); board.innerHTML='';
+  // エリアでグループ化（順序は部長順→エリア出現順）
+  const groups={}; const order=[];
+  stores.forEach(s=>{const k=areaKey(s); if(!(k in groups)){groups[k]=[];order.push(k);} groups[k].push(s);});
+  order.sort((a,b)=>{
+    const ba=a.split(' ／ ')[0], bb=b.split(' ／ ')[0];
+    let ia=BUCHO_ORDER.indexOf(ba),ib=BUCHO_ORDER.indexOf(bb);
+    if(ia<0)ia=98;if(ib<0)ib=98; if(ia!==ib)return ia-ib; return a.localeCompare(b,'ja');
+  });
+  order.forEach(k=>{
+    const list=groups[k];
+    const ppl=list.reduce((n,s)=>n+s.members.length,0);
+    const parts=k.split(' ／ ');
+    const blk=document.createElement('div'); blk.className='area-block'; blk.dataset.areakey=k;
+    let html=`<div class="area-title"><span class="tag">${esc(parts[0])}</span>
+      ${parts[1]?'<span>'+esc(parts[1])+'</span>':''}
+      <span class="cnt">${list.length}店舗・${ppl}人</span></div><div class="stores">`;
+    list.forEach(s=>html+=storeHtml(s));
+    html+='</div>'; blk.innerHTML=html; board.appendChild(blk);
+  });
+  bindDnd(); renderStats();
+}
+
+function roleColor(pos){ return pos==='店主'?'var(--nori)':pos==='副店主'?'var(--broth)':'#9a8f80'; }
+
+function memberCard(s,m,mi){
+  const eid=m.empid?`<span class="eid">${esc(m.empid.replace('.0',''))}</span>`
+                    :`<span class="eid none">—</span>`;
+  return `<div class="card" draggable="true" data-s="${s._id}" data-m="${mi}" title="クリックで編集・削除／ドラッグで移動">
+    ${eid}<span class="nm">${esc(m.name)}</span>
+    ${m.group?`<span class="gp">${esc(m.group)}</span>`:''}</div>`;
+}
+
+function roleSlot(s,role){
+  const mems=s.members.map((m,mi)=>({m,mi})).filter(x=>x.m.pos===role);
+  const isKey=(role==='店主'||role==='副店主');
+  let inner=mems.map(x=>memberCard(s,x.m,x.mi)).join('');
+  if(mems.length===0){
+    inner=`<div class="slot-empty-txt">${isKey?'（未定 — ここにドラッグ）':'空き'}</div>`;
+  }
+  const emptyKeyCls=(isKey&&mems.length===0)?' empty-key':'';
+  return `<div class="slot-group">
+    <div class="slot-label" style="color:${roleColor(role)}">${esc(role)}</div>
+    <div class="role-slot${emptyKeyCls}" data-s="${s._id}" data-role="${esc(role)}">${inner}</div>
+  </div>`;
+}
+
+function storeHtml(s){
+  const t=num(s.teiin), j=s.members.length;
+  let capCls='ok',capTxt=`${j}名`;
+  if(t!=null){capTxt=`${j}/${t|0}`; capCls=j<t?'short':j>t?'over':'ok';}
+  const hasKencho=s.members.some(m=>m.pos==='店主');
+  const nokencho=!hasKencho && s.section==='通常';
+  return `<div class="store${nokencho?' nokencho':''}" data-s="${s._id}">
+    <div class="store-head" draggable="true" data-storedrag="${s._id}">
+      <span class="grip">⣿</span><span class="sn">${esc(s.store)}</span>
+      <span class="cap ${capCls}">${capTxt}</span>
+      <span class="del" data-del="${s._id}" title="この店舗を削除">✕</span>
+    </div>
+    ${nokencho?'<div class="nokencho-badge">⚠ 店主 未定</div>':''}
+    <div class="slots">
+      ${roleSlot(s,'店主')}${roleSlot(s,'副店主')}${roleSlot(s,'社員')}
+    </div>
+    <button class="add-person" data-addp="${s._id}">＋ 人を追加</button>
+  </div>`;
+}
+
+function renderStats(){
+  const nStore=stores.length, nPeople=stores.reduce((n,s)=>n+s.members.length,0);
+  let noK=0,over=0;
+  stores.forEach(s=>{
+    if(s.section==='通常'&&!s.members.some(m=>m.pos==='店主'))noK++;
+    const t=num(s.teiin); if(t!=null&&s.members.length>t)over++;
+  });
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="n">${nStore}</div><div class="l">店舗数</div></div>
+    <div class="stat"><div class="n">${nPeople}</div><div class="l">配置人数</div></div>
+    <div class="stat"><div class="n" style="color:var(--accent)">${noK}</div><div class="l">店主未定</div></div>
+    <div class="stat"><div class="n" style="color:var(--broth-dark)">${over}</div><div class="l">過員店舗</div></div>`;
+}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function findStore(id){return stores.find(s=>s._id===+id);}
+
+let dragKind=null, dragData=null;
+function bindDnd(){
+  // 人カード
+  document.querySelectorAll('.card').forEach(c=>{
+    let moved=false;
+    c.addEventListener('dragstart',e=>{e.stopPropagation();moved=true;dragKind='member';
+      dragData={s:+c.dataset.s,m:+c.dataset.m};c.classList.add('dragging');});
+    c.addEventListener('dragend',()=>{c.classList.remove('dragging');dragKind=null;dragData=null;
+      setTimeout(()=>{moved=false;},50);});
+    c.addEventListener('click',()=>{ if(moved)return; openEditPerson(+c.dataset.s,+c.dataset.m); });
+  });
+  // 役職スロット（人の受け皿）
+  document.querySelectorAll('.role-slot').forEach(z=>{
+    z.addEventListener('dragover',e=>{if(dragKind==='member'){e.preventDefault();z.classList.add('dragover');}});
+    z.addEventListener('dragleave',()=>z.classList.remove('dragover'));
+    z.addEventListener('drop',e=>{
+      if(dragKind!=='member')return;
+      e.preventDefault();e.stopPropagation();z.classList.remove('dragover');
+      const from=findStore(dragData.s); const person=from.members[dragData.m];
+      const toS=findStore(z.dataset.s); const newRole=z.dataset.role;
+      if(!person||!toS)return;
+      from.members.splice(dragData.m,1);
+      const moved={...person,pos:newRole,_edited:true};
+      toS.members.push(moved); toS._edited=true; from._edited=true;
+      render();
+      const same=from===toS;
+      toast(`${person.name} を ${same?'':toS.store+' の '}${newRole} に${same?'変更':'移動'}`);
+    });
+  });
+  // 店舗見出し（店舗ごと移動）
+  document.querySelectorAll('[data-storedrag]').forEach(h=>{
+    h.addEventListener('dragstart',e=>{dragKind='store';dragData={s:+h.dataset.storedrag};});
+    h.addEventListener('dragend',()=>{dragKind=null;dragData=null;});
+  });
+  // エリアブロック（店舗の受け皿）
+  document.querySelectorAll('.area-block').forEach(z=>{
+    z.addEventListener('dragover',e=>{if(dragKind==='store'){e.preventDefault();z.classList.add('dragover');}});
+    z.addEventListener('dragleave',()=>z.classList.remove('dragover'));
+    z.addEventListener('drop',e=>{
+      if(dragKind!=='store')return;
+      e.preventDefault();z.classList.remove('dragover');
+      const s=findStore(dragData.s); const key=z.dataset.areakey;
+      if(!s)return;
+      const parts=key.split(' ／ ');
+      if(parts.length===2){ s.bucho=parts[0]; s.area=parts[1]==='（エリア未設定）'?'':parts[1]; s.section='通常'; }
+      else { s.section=key; s.bucho=key; }
+      s._edited=true; render();
+      toast(`${s.store} を「${key}」へ移動`);
+    });
+  });
+  // 店舗削除
+  document.querySelectorAll('[data-del]').forEach(x=>{
+    x.addEventListener('click',e=>{
+      e.stopPropagation();
+      const s=findStore(x.dataset.del); if(!s)return;
+      const n=s.members.length;
+      if(confirm(`「${s.store}」を削除しますか？${n>0?'\n配置中の'+n+'人も一緒に外れます。':''}`)){
+        stores=stores.filter(z=>z._id!==s._id); render();
+        toast(`${s.store} を削除しました`);
+      }
+    });
+  });
+  // 人を追加
+  document.querySelectorAll('[data-addp]').forEach(x=>{
+    x.addEventListener('click',()=>openAddPerson(+x.dataset.addp));
+  });
+}
+
+document.getElementById('search').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.card').forEach(c=>{
+    const hit=q&&c.textContent.toLowerCase().includes(q);
+    c.classList.toggle('hl',!!hit); c.style.opacity=(q&&!hit)?'.3':'';
+  });
+});
+
+function exportPlace(){
+  const rows=[['部長／セクション','エリア','店舗','定員','実数','店主未定','役職','社員番号','氏名','グループ','備考','変更']];
+  const ordered=[...stores];
+  ordered.forEach(s=>{
+    const noK=s.section==='通常'&&!s.members.some(m=>m.pos==='店主')?'⚠':'';
+    const ordRole={'店主':0,'副店主':1,'社員':2};
+    const mem=[...s.members].sort((a,b)=>(ordRole[a.pos]??9)-(ordRole[b.pos]??9));
+    if(mem.length===0){rows.push([s.bucho,s.area,s.store,s.teiin,0,noK,'','','','','',s._edited?'●':'']);}
+    mem.forEach(m=>rows.push([s.bucho,s.area,s.store,s.teiin,s.members.length,noK,
+      m.pos,(m.empid||'').replace('.0',''),m.name,m.group||'',m.note||'',
+      (m._edited||s._edited)?'●':'']));
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:14},{wch:12},{wch:18},{wch:6},{wch:6},{wch:7},{wch:7},{wch:9},{wch:20},{wch:8},{wch:14},{wch:6}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'配置表');
+  const d=new Date(),st=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb,'凪_配置表更新_'+st+'.xlsx');
+  toast('配置表をエクセル出力しました');
+}
+document.getElementById('exportPlace').onclick=exportPlace;
+
+let tt; function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2400);}
+
+
+// ===== ID採番 =====
+function nextStoreId(){ return stores.reduce((m,s)=>Math.max(m,s._id),-1)+1; }
+
+// ===== モーダル基盤 =====
+const modalBg=document.getElementById('modalBg'), modalEl=document.getElementById('modal');
+function closeModal(){ modalBg.classList.remove('show'); modalEl.innerHTML=''; }
+modalBg.addEventListener('click',e=>{ if(e.target===modalBg)closeModal(); });
+
+// ===== 店舗を追加 =====
+function areaOptions(sel){
+  const keys=[...new Set(stores.map(s=>areaKey(s)))];
+  return keys.map(k=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(k)}</option>`).join('');
+}
+document.getElementById('addStore').onclick=()=>{
+  modalEl.innerHTML=`<h3>店舗を追加</h3>
+    <label>店舗名</label><input id="m_name" placeholder="例：新宿◯◯店">
+    <label>エリア（配属先）</label><select id="m_area">${areaOptions()}</select>
+    <label>定員</label><input id="m_teiin" type="number" min="0" placeholder="例：4">
+    <div class="modal-btns">
+      <button class="btn gray" id="m_cancel">やめる</button>
+      <button class="btn" id="m_ok">追加する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('m_cancel').onclick=closeModal;
+  document.getElementById('m_ok').onclick=()=>{
+    const nm=document.getElementById('m_name').value.trim();
+    if(!nm){ alert('店舗名を入れてください'); return; }
+    const key=document.getElementById('m_area').value;
+    const teiin=document.getElementById('m_teiin').value.trim();
+    const parts=key.split(' ／ ');
+    const st={_id:nextStoreId(),store:nm,teiin:teiin,members:[],_edited:true};
+    if(parts.length===2){ st.bucho=parts[0]; st.area=parts[1]==='（エリア未設定）'?'':parts[1]; st.section='通常'; }
+    else { st.section=key; st.bucho=key; st.area=''; }
+    stores.push(st); closeModal(); render();
+    toast(`店舗「${nm}」を追加しました`);
+  };
+};
+
+// ===== 人を追加 =====
+function openAddPerson(sid){
+  const s=findStore(sid); if(!s)return;
+  modalEl.innerHTML=`<h3>${esc(s.store)} に人を追加</h3>
+    <label>氏名</label><input id="p_name" placeholder="例：山田太郎">
+    <label>社員番号（分かれば）</label><input id="p_eid" placeholder="例：104">
+    <label>役職</label><select id="p_pos">
+      <option value="店主">店主</option><option value="副店主">副店主</option>
+      <option value="社員" selected>社員</option></select>
+    <label>グループ（任意）</label><input id="p_gp" placeholder="例：1G">
+    <div class="modal-btns">
+      <button class="btn gray" id="p_cancel">やめる</button>
+      <button class="btn" id="p_ok">追加する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('p_cancel').onclick=closeModal;
+  document.getElementById('p_ok').onclick=()=>{
+    const nm=document.getElementById('p_name').value.trim();
+    if(!nm){ alert('氏名を入れてください'); return; }
+    s.members.push({pos:document.getElementById('p_pos').value,name:nm,
+      empid:document.getElementById('p_eid').value.trim(),
+      group:document.getElementById('p_gp').value.trim(),note:'',_edited:true});
+    s._edited=true; closeModal(); render();
+    toast(`${nm} を ${s.store} に追加しました`);
+  };
+}
+
+// ===== 人を編集・削除 =====
+function openEditPerson(sid,mi){
+  const s=findStore(sid); if(!s)return;
+  const m=s.members[mi]; if(!m)return;
+  const posOpt=['店主','副店主','社員'].map(p=>
+    `<option value="${p}"${m.pos===p?' selected':''}>${p}</option>`).join('');
+  modalEl.innerHTML=`<h3>${esc(m.name)} を編集</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(s.store)}</div>
+    <label>氏名</label><input id="e_name" value="${esc(m.name)}">
+    <label>社員番号</label><input id="e_eid" value="${esc((m.empid||'').replace('.0',''))}" placeholder="分かれば">
+    <label>役職</label><select id="e_pos">${posOpt}</select>
+    <label>グループ（任意）</label><input id="e_gp" value="${esc(m.group||'')}">
+    <div class="modal-btns">
+      <button class="btn gray" id="e_cancel">やめる</button>
+      <button class="btn" id="e_ok">保存する</button>
+    </div>
+    <button class="btn" id="e_del" style="width:100%;margin-top:9px;background:#fdecea;color:var(--accent)">この人を削除する</button>`;
+  modalBg.classList.add('show');
+  document.getElementById('e_cancel').onclick=closeModal;
+  document.getElementById('e_ok').onclick=()=>{
+    const nm=document.getElementById('e_name').value.trim();
+    if(!nm){ alert('氏名を入れてください'); return; }
+    m.name=nm;
+    m.empid=document.getElementById('e_eid').value.trim();
+    m.pos=document.getElementById('e_pos').value;
+    m.group=document.getElementById('e_gp').value.trim();
+    m._edited=true; s._edited=true; closeModal(); render();
+    toast(`${nm} の情報を更新しました`);
+  };
+  document.getElementById('e_del').onclick=()=>{
+    if(confirm(`「${m.name}」を ${s.store} から外しますか？`)){
+      s.members.splice(mi,1); s._edited=true; closeModal(); render();
+      toast(`${m.name} を削除しました`);
+    }
+  };
+}
+
+// ===== 配置表を取込 =====
+document.getElementById('importFile').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // ヘッダ位置を探す
+      let hi=rows.findIndex(r=>r.includes('店舗')&&r.includes('氏名'));
+      if(hi<0){ alert('この形式は読み込めません。ツールから出力した配置表を選んでください。'); return; }
+      const H=rows[hi];
+      const ci=n=>H.indexOf(n);
+      const map={bucho:ci('部長／セクション'),area:ci('エリア'),store:ci('店舗'),
+        teiin:ci('定員'),pos:ci('役職'),eid:ci('社員番号'),name:ci('氏名'),
+        gp:ci('グループ'),note:ci('備考')};
+      const byStore={}; const order=[];
+      for(let i=hi+1;i<rows.length;i++){
+        const r=rows[i]; const store=String(r[map.store]||'').trim();
+        if(!store)continue;
+        if(!(store in byStore)){
+          byStore[store]={_id:order.length,store:store,
+            bucho:String(r[map.bucho]||'').trim(),area:String(r[map.area]||'').trim(),
+            teiin:String(r[map.teiin]||'').trim(),members:[],
+            section:(['花山部長','川上部長','大塚部長'].includes(String(r[map.bucho]||'').trim()))?'通常':'通常'};
+          // セクション判定：部長名でなければセクション扱い
+          const b=byStore[store].bucho;
+          if(!b.includes('部長')&&b) byStore[store].section=b;
+          order.push(store);
+        }
+        const name=String(r[map.name]||'').trim();
+        if(name) byStore[store].members.push({
+          pos:String(r[map.pos]||'社員').trim()||'社員',name:name,
+          empid:String(r[map.eid]||'').trim(),group:String(r[map.gp]||'').trim(),
+          note:String(r[map.note]||'').trim()});
+      }
+      stores=order.map((k,i)=>({...byStore[k],_id:i}));
+      render();
+      toast(`取込完了：${stores.length}店舗・${stores.reduce((n,s)=>n+s.members.length,0)}人`);
+    }catch(err){ alert('読み込みに失敗しました：'+err.message); }
+    ev.target.value='';
+  };
+  rd.readAsArrayBuffer(f);
+});
+
+render();
+</script>
+</body>
+</html>
