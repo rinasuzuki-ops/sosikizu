@@ -38,6 +38,13 @@ header .sub{font-size:11px;opacity:.7}
   display:flex;align-items:center;gap:8px;padding-left:2px}
 .area-title .tag{font-size:10px;font-weight:700;color:#fff;background:var(--nori);padding:2px 8px;border-radius:20px}
 .area-title .cnt{font-size:11px;color:var(--muted);font-weight:600}
+.area-title .mgr{cursor:pointer;padding:1px 6px;border-radius:6px;transition:.12s;border:1px dashed transparent}
+.area-title .mgr:hover{background:var(--broth-soft);border-color:#e6d3bc;color:var(--broth-dark)}
+.area-title .mgr .pen{font-size:10px;color:var(--muted);margin-left:3px}
+.store-head .sn{cursor:pointer;border-radius:5px;transition:.12s}
+.store-head .sn:hover{color:var(--broth-dark)}
+.card .move{margin-left:6px;font-size:12px;color:var(--muted);cursor:pointer;padding:0 3px;border-radius:4px;flex:none;line-height:1}
+.card .move:hover{color:var(--broth);background:var(--broth-soft)}
 .stores{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
 .store{background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow);
   overflow:hidden;display:flex;flex-direction:column}
@@ -77,6 +84,8 @@ header .sub{font-size:11px;opacity:.7}
 
 .store-head .del{color:var(--muted);font-size:14px;flex:none;cursor:pointer;padding:0 2px;border-radius:4px;line-height:1}
 .store-head .del:hover{color:var(--accent);background:#fdecea}
+.store-head .movestore{font-size:12px;flex:none;cursor:pointer;padding:0 3px;border-radius:4px;line-height:1;filter:grayscale(.3);opacity:.75}
+.store-head .movestore:hover{background:var(--broth-soft);opacity:1;filter:none}
 .add-person{margin:2px 11px 10px;border:1.5px dashed var(--line);border-radius:7px;
   background:none;color:var(--muted);font-size:11px;font-weight:700;padding:5px;cursor:pointer;
   width:calc(100% - 22px);font-family:inherit;transition:.12s}
@@ -103,6 +112,7 @@ header .sub{font-size:11px;opacity:.7}
   </div>
   <div class="toolbar">
     <input class="search" id="search" placeholder="名前・番号で検索…">
+    <button class="btn" id="addManager">＋マネージャー追加</button>
     <button class="btn" id="addStore">＋店舗を追加</button>
     <label class="btn" style="cursor:pointer" for="importFile">配置表を取込</label>
     <input type="file" id="importFile" accept=".xlsx" style="display:none">
@@ -111,9 +121,10 @@ header .sub{font-size:11px;opacity:.7}
 </header>
 <div class="wrap">
   <div class="hint"><span>💡</span>
-  <div><b>使い方：</b>①人カードを<b>役職の枠</b>にドラッグ＝役職変更・店舗移動。
-  ②<b>店舗の見出し（⣿）</b>をつかんでエリアにドラッグ＝店舗ごと移動。
-  ③<b>人カードをクリック</b>＝名前・番号・役職の編集や削除。各店舗の<b>＋人を追加</b>／店舗見出しの<b>✕</b>で店舗削除。
+  <div><b>使い方：</b>①人カードを<b>役職の枠</b>にドラッグ、または<b>カードの「⇄」で移動先店舗を選択</b>＝役職変更・店舗移動。
+  ②<b>店舗の見出しの「📍」で担当マネージャーを選んで移動</b>、または⣿をつかんでドラッグでも移動。
+  ③<b>人カードをクリック</b>＝編集・削除。<b>店舗名クリック</b>＝定員変更。<b>マネージャー名（✎）クリック</b>＝担当者変更。
+  <b>＋マネージャー追加</b>で新任エリアを新規作成。
   <b>保存は「配置表を出力」→ 次回「配置表を取込」で続き。</b> 赤枠＝店主未定。</div></div>
   <div class="stats" id="stats"></div>
   <div id="board"></div>
@@ -149,9 +160,18 @@ function render(){
     const list=groups[k];
     const ppl=list.reduce((n,s)=>n+s.members.length,0);
     const parts=k.split(' ／ ');
+    const isNormal=list[0] && list[0].section==='通常';
     const blk=document.createElement('div'); blk.className='area-block'; blk.dataset.areakey=k;
+    let mgrHtml='';
+    if(parts[1]!==undefined){
+      if(isNormal){
+        mgrHtml=`<span class="mgr" data-mgrkey="${esc(k)}">${esc(parts[1])}<span class="pen">✎</span></span>`;
+      }else{
+        mgrHtml='<span>'+esc(parts[1])+'</span>';
+      }
+    }
     let html=`<div class="area-title"><span class="tag">${esc(parts[0])}</span>
-      ${parts[1]?'<span>'+esc(parts[1])+'</span>':''}
+      ${mgrHtml}
       <span class="cnt">${list.length}店舗・${ppl}人</span></div><div class="stores">`;
     list.forEach(s=>html+=storeHtml(s));
     html+='</div>'; blk.innerHTML=html; board.appendChild(blk);
@@ -166,7 +186,8 @@ function memberCard(s,m,mi){
                     :`<span class="eid none">—</span>`;
   return `<div class="card" draggable="true" data-s="${s._id}" data-m="${mi}" title="クリックで編集・削除／ドラッグで移動">
     ${eid}<span class="nm">${esc(m.name)}</span>
-    ${m.group?`<span class="gp">${esc(m.group)}</span>`:''}</div>`;
+    ${m.group?`<span class="gp">${esc(m.group)}</span>`:''}
+    <span class="move" data-move-s="${s._id}" data-move-m="${mi}" title="移動先の店舗を選ぶ">⇄</span></div>`;
 }
 
 function roleSlot(s,role){
@@ -188,11 +209,12 @@ function storeHtml(s){
   let capCls='ok',capTxt=`${j}名`;
   if(t!=null){capTxt=`${j}/${t|0}`; capCls=j<t?'short':j>t?'over':'ok';}
   const hasKencho=s.members.some(m=>m.pos==='店主');
-  const nokencho=!hasKencho && s.section==='通常';
+  const nokencho=!hasKencho && s.section==='通常' && !s._placeholder;
   return `<div class="store${nokencho?' nokencho':''}" data-s="${s._id}">
     <div class="store-head" draggable="true" data-storedrag="${s._id}">
-      <span class="grip">⣿</span><span class="sn">${esc(s.store)}</span>
+      <span class="grip">⣿</span><span class="sn" data-editstore="${s._id}" title="クリックで定員変更">${esc(s.store)}</span>
       <span class="cap ${capCls}">${capTxt}</span>
+      <span class="movestore" data-movestore="${s._id}" title="担当マネージャーを選んで移動">📍</span>
       <span class="del" data-del="${s._id}" title="この店舗を削除">✕</span>
     </div>
     ${nokencho?'<div class="nokencho-badge">⚠ 店主 未定</div>':''}
@@ -204,9 +226,10 @@ function storeHtml(s){
 }
 
 function renderStats(){
-  const nStore=stores.length, nPeople=stores.reduce((n,s)=>n+s.members.length,0);
+  const real=stores.filter(s=>!s._placeholder);
+  const nStore=real.length, nPeople=real.reduce((n,s)=>n+s.members.length,0);
   let noK=0,over=0;
-  stores.forEach(s=>{
+  real.forEach(s=>{
     if(s.section==='通常'&&!s.members.some(m=>m.pos==='店主'))noK++;
     const t=num(s.teiin); if(t!=null&&s.members.length>t)over++;
   });
@@ -266,7 +289,12 @@ function bindDnd(){
       const parts=key.split(' ／ ');
       if(parts.length===2){ s.bucho=parts[0]; s.area=parts[1]==='（エリア未設定）'?'':parts[1]; s.section='通常'; }
       else { s.section=key; s.bucho=key; }
-      s._edited=true; render();
+      s._edited=true;
+      // 移動先エリアにプレースホルダがあれば、実店舗が入ったので消す
+      if(!s._placeholder){
+        stores=stores.filter(x=>!(x._placeholder && areaKey(x)===key));
+      }
+      render();
       toast(`${s.store} を「${key}」へ移動`);
     });
   });
@@ -286,6 +314,26 @@ function bindDnd(){
   document.querySelectorAll('[data-addp]').forEach(x=>{
     x.addEventListener('click',()=>openAddPerson(+x.dataset.addp));
   });
+  // 人の移動（リスト選択）
+  document.querySelectorAll('[data-move-s]').forEach(x=>{
+    x.addEventListener('click',e=>{ e.stopPropagation();
+      openMovePerson(+x.dataset.moveS,+x.dataset.moveM); });
+  });
+  // 店舗名クリック → 定員変更
+  document.querySelectorAll('[data-editstore]').forEach(x=>{
+    x.addEventListener('click',e=>{ e.stopPropagation();
+      openEditStore(+x.dataset.editstore); });
+  });
+  // マネージャー名クリック → 担当者変更
+  document.querySelectorAll('[data-mgrkey]').forEach(x=>{
+    x.addEventListener('click',e=>{ e.stopPropagation();
+      openEditManager(x.dataset.mgrkey); });
+  });
+  // 店舗の📍→ 担当マネージャーを選んで移動
+  document.querySelectorAll('[data-movestore]').forEach(x=>{
+    x.addEventListener('click',e=>{ e.stopPropagation();
+      openMoveStore(+x.dataset.movestore); });
+  });
 }
 
 document.getElementById('search').addEventListener('input',e=>{
@@ -298,7 +346,7 @@ document.getElementById('search').addEventListener('input',e=>{
 
 function exportPlace(){
   const rows=[['部長／セクション','エリア','店舗','定員','実数','店主未定','役職','社員番号','氏名','グループ','備考','変更']];
-  const ordered=[...stores];
+  const ordered=stores.filter(s=>!s._placeholder);
   ordered.forEach(s=>{
     const noK=s.section==='通常'&&!s.members.some(m=>m.pos==='店主')?'⚠':'';
     const ordRole={'店主':0,'副店主':1,'社員':2};
@@ -422,6 +470,185 @@ function openEditPerson(sid,mi){
     }
   };
 }
+
+// ===== 人の移動（リストから店舗を選ぶ） =====
+function storeOptionsGrouped(excludeId){
+  // エリアごとに<optgroup>で店舗を並べる
+  const groups={}; const order=[];
+  stores.forEach(s=>{const k=areaKey(s); if(!(k in groups)){groups[k]=[];order.push(k);} groups[k].push(s);});
+  return order.map(k=>{
+    const opts=groups[k].filter(s=>s._id!==excludeId)
+      .map(s=>`<option value="${s._id}">${esc(s.store)}</option>`).join('');
+    return opts?`<optgroup label="${esc(k)}">${opts}</optgroup>`:'';
+  }).join('');
+}
+function openMovePerson(sid,mi){
+  const s=findStore(sid); if(!s)return;
+  const m=s.members[mi]; if(!m)return;
+  const posOpt=['店主','副店主','社員'].map(p=>
+    `<option value="${p}"${m.pos===p?' selected':''}>${p}</option>`).join('');
+  modalEl.innerHTML=`<h3>${esc(m.name)} を移動</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">今：${esc(s.store)}／${esc(m.pos)}</div>
+    <label>移動先の店舗</label><select id="mv_store">${storeOptionsGrouped(sid)}</select>
+    <label>移動先での役職</label><select id="mv_pos">${posOpt}</select>
+    <div class="modal-btns">
+      <button class="btn gray" id="mv_cancel">やめる</button>
+      <button class="btn" id="mv_ok">移動する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('mv_cancel').onclick=closeModal;
+  document.getElementById('mv_ok').onclick=()=>{
+    const toId=+document.getElementById('mv_store').value;
+    const newPos=document.getElementById('mv_pos').value;
+    const toS=findStore(toId); if(!toS)return;
+    s.members.splice(mi,1);
+    toS.members.push({...m,pos:newPos,_edited:true});
+    toS._edited=true; s._edited=true; closeModal(); render();
+    toast(`${m.name} を ${toS.store} の ${newPos} に移動`);
+  };
+}
+
+// ===== 店舗の移動（担当マネージャー＝エリアを選ぶ） =====
+function areaKeyOptions(currentKey){
+  // 既存のエリア/セクションを部長順で並べ、現在地は除く
+  const keys=[...new Set(stores.map(s=>areaKey(s)))];
+  keys.sort((a,b)=>{
+    const ba=a.split(' ／ ')[0], bb=b.split(' ／ ')[0];
+    let ia=BUCHO_ORDER.indexOf(ba),ib=BUCHO_ORDER.indexOf(bb);
+    if(ia<0)ia=98;if(ib<0)ib=98; if(ia!==ib)return ia-ib; return a.localeCompare(b,'ja');
+  });
+  // 部長ごとに<optgroup>でまとめる
+  const byBucho={}; const border=[];
+  keys.forEach(k=>{
+    const parts=k.split(' ／ ');
+    const head = parts.length===2 ? parts[0] : 'その他';
+    if(!(head in byBucho)){byBucho[head]=[];border.push(head);}
+    byBucho[head].push(k);
+  });
+  return border.map(h=>{
+    const opts=byBucho[h].map(k=>{
+      const parts=k.split(' ／ ');
+      const label = parts.length===2 ? (parts[1]==='（エリア未設定）'?'（エリア未設定）':parts[1]) : k;
+      const sel = k===currentKey ? ' selected' : '';
+      return `<option value="${esc(k)}"${sel}>${esc(label)}</option>`;
+    }).join('');
+    return `<optgroup label="${esc(h)}">${opts}</optgroup>`;
+  }).join('');
+}
+function openMoveStore(sid){
+  const s=findStore(sid); if(!s)return;
+  const curKey=areaKey(s);
+  modalEl.innerHTML=`<h3>${esc(s.store)} を移動</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">今：${esc(curKey)}</div>
+    <label>移動先の担当マネージャー（エリア）</label>
+    <select id="ms_area">${areaKeyOptions(curKey)}</select>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">配置中の${s.members.length}人ごと一緒に移動します。</div>
+    <div class="modal-btns">
+      <button class="btn gray" id="ms_cancel">やめる</button>
+      <button class="btn" id="ms_ok">移動する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('ms_cancel').onclick=closeModal;
+  document.getElementById('ms_ok').onclick=()=>{
+    const key=document.getElementById('ms_area').value;
+    const parts=key.split(' ／ ');
+    if(parts.length===2){ s.bucho=parts[0]; s.area=parts[1]==='（エリア未設定）'?'':parts[1]; s.section='通常'; }
+    else { s.section=key; s.bucho=key; }
+    s._edited=true;
+    // 移動先にプレースホルダがあれば消す
+    if(!s._placeholder){
+      stores=stores.filter(x=>!(x._placeholder && areaKey(x)===key));
+    }
+    closeModal(); render();
+    toast(`${s.store} を「${key}」へ移動`);
+  };
+}
+
+// ===== 店舗の定員変更 =====
+function openEditStore(sid){
+  const s=findStore(sid); if(!s)return;
+  modalEl.innerHTML=`<h3>${esc(s.store)}</h3>
+    <label>店舗名</label><input id="es_name" value="${esc(s.store)}">
+    <label>定員（人数）</label><input id="es_teiin" type="number" min="0" value="${esc((s.teiin||'').toString().replace('.0',''))}" placeholder="例：4">
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">現在の配置：${s.members.length}人</div>
+    <div class="modal-btns">
+      <button class="btn gray" id="es_cancel">やめる</button>
+      <button class="btn" id="es_ok">保存する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('es_cancel').onclick=closeModal;
+  document.getElementById('es_ok').onclick=()=>{
+    const nm=document.getElementById('es_name').value.trim();
+    if(!nm){ alert('店舗名を入れてください'); return; }
+    s.store=nm; s.teiin=document.getElementById('es_teiin').value.trim();
+    s._edited=true; closeModal(); render();
+    toast(`${nm} を更新しました`);
+  };
+}
+
+// ===== マネージャー（エリア）名の変更 =====
+function openEditManager(key){
+  const parts=key.split(' ／ ');
+  const bucho=parts[0], curArea=parts[1]||'';
+  const targets=stores.filter(s=>areaKey(s)===key);
+  const n=targets.length;
+  modalEl.innerHTML=`<h3>マネージャーを変更</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(bucho)} ／ 現在：${esc(curArea)}（${n}店舗）</div>
+    <label>マネージャー名（エリア名）</label><input id="mg_name" value="${esc(curArea==='（エリア未設定）'?'':curArea)}" placeholder="例：田中太郎エリア">
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">このエリアの${n}店舗すべての担当が変わります。</div>
+    <div class="modal-btns">
+      <button class="btn gray" id="mg_cancel">やめる</button>
+      <button class="btn" id="mg_ok">変更する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('mg_cancel').onclick=closeModal;
+  document.getElementById('mg_ok').onclick=()=>{
+    const newArea=document.getElementById('mg_name').value.trim();
+    if(!newArea){ alert('マネージャー名を入れてください'); return; }
+    targets.forEach(s=>{ s.area=newArea; s._edited=true; });
+    closeModal(); render();
+    toast(`マネージャーを「${newArea}」に変更（${n}店舗）`);
+  };
+}
+
+// ===== マネージャー（エリア）の新規作成 =====
+function buchoOptions(sel){
+  const set=new Set(stores.filter(s=>s.section==='通常').map(s=>s.bucho));
+  ['花山部長','川上部長','大塚部長'].forEach(b=>set.add(b));
+  return [...set].map(b=>`<option value="${esc(b)}"${b===sel?' selected':''}>${esc(b)}</option>`).join('');
+}
+document.getElementById('addManager').onclick=()=>{
+  modalEl.innerHTML=`<h3>マネージャー（エリア）を新規作成</h3>
+    <label>担当マネージャー名（エリア名）</label><input id="nm_name" placeholder="例：新任 山田エリア">
+    <label>どの部長の下につく？</label><select id="nm_bucho">${buchoOptions()}</select>
+    <label>最初の店舗名（任意・後でドラッグでも追加可）</label><input id="nm_store" placeholder="空欄でも作れます">
+    <label>定員（店舗を作る場合）</label><input id="nm_teiin" type="number" min="0" placeholder="例：4">
+    <div class="modal-btns">
+      <button class="btn gray" id="nm_cancel">やめる</button>
+      <button class="btn" id="nm_ok">作成する</button>
+    </div>`;
+  modalBg.classList.add('show');
+  document.getElementById('nm_cancel').onclick=closeModal;
+  document.getElementById('nm_ok').onclick=()=>{
+    const area=document.getElementById('nm_name').value.trim();
+    if(!area){ alert('マネージャー名を入れてください'); return; }
+    const bucho=document.getElementById('nm_bucho').value;
+    const storeName=document.getElementById('nm_store').value.trim();
+    const teiin=document.getElementById('nm_teiin').value.trim();
+    if(storeName){
+      stores.push({_id:nextStoreId(),store:storeName,teiin:teiin,members:[],
+        bucho:bucho,area:area,section:'通常',_edited:true});
+      closeModal(); render();
+      toast(`「${bucho} ／ ${area}」を作成し、店舗「${storeName}」を追加`);
+    }else{
+      // 店舗なしのエリアはプレースホルダ店舗で可視化
+      stores.push({_id:nextStoreId(),store:'（店舗未設定）',teiin:'',members:[],
+        bucho:bucho,area:area,section:'通常',_edited:true,_placeholder:true});
+      closeModal(); render();
+      toast(`「${bucho} ／ ${area}」を作成（店舗をドラッグで入れてください）`);
+    }
+  };
+};
 
 // ===== 配置表を取込 =====
 document.getElementById('importFile').addEventListener('change',ev=>{
