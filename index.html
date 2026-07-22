@@ -102,6 +102,26 @@ header .sub{font-size:11px;opacity:.7}
 .modal-btns .btn{flex:1;justify-content:center}
 .btn.gray{background:#e8e2d8;color:var(--ink)}
 .btn.gray:hover{background:#ddd5c8}
+.modal.wide{max-width:560px}
+.check-summary{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.check-card{flex:1;min-width:120px;border-radius:9px;padding:10px 12px;text-align:center}
+.check-card.ok{background:#e8f3ec}
+.check-card.warn{background:#fdecea}
+.check-card.info{background:#fdf1e3}
+.check-card .cn{font-size:22px;font-weight:800}
+.check-card .cl{font-size:10.5px;font-weight:700;margin-top:2px}
+.check-card.ok .cn{color:var(--ok)} .check-card.warn .cn{color:var(--accent)} .check-card.info .cn{color:var(--broth-dark)}
+.check-section{margin-top:14px}
+.check-section h4{font-size:13px;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.check-list{max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:8px}
+.check-row{padding:6px 10px;font-size:12px;border-bottom:1px solid #f0ece4;display:flex;gap:8px;align-items:center}
+.check-row:last-child{border-bottom:none}
+.check-row .badge{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;flex:none}
+.check-row .badge.new{background:#e8f3ec;color:var(--ok)}
+.check-row .badge.eid{background:var(--muted);color:#fff;min-width:38px;text-align:center}
+.check-row .r-area{margin-left:auto;color:var(--muted);font-size:10.5px}
+.check-none{padding:12px;text-align:center;color:var(--ok);font-size:12px;font-weight:600}
+.check-add-btn{margin-top:6px;width:100%}
 </style>
 </head>
 <body>
@@ -116,6 +136,8 @@ header .sub{font-size:11px;opacity:.7}
     <button class="btn" id="addStore">＋店舗を追加</button>
     <label class="btn" style="cursor:pointer" for="importFile">配置表を取込</label>
     <input type="file" id="importFile" accept=".xlsx" style="display:none">
+    <label class="btn" style="cursor:pointer;background:var(--nori)" for="checkFile">🔍 社員リストと照合</label>
+    <input type="file" id="checkFile" accept=".xlsx" style="display:none">
     <button class="btn" id="exportPlace">配置表を出力</button>
   </div>
 </header>
@@ -124,7 +146,7 @@ header .sub{font-size:11px;opacity:.7}
   <div><b>使い方：</b>①人カードを<b>役職の枠</b>にドラッグ、または<b>カードの「⇄」で移動先店舗を選択</b>＝役職変更・店舗移動。
   ②<b>店舗の見出しの「📍」で担当マネージャーを選んで移動</b>、または⣿をつかんでドラッグでも移動。
   ③<b>人カードをクリック</b>＝編集・削除。<b>店舗名クリック</b>＝定員変更。<b>マネージャー名（✎）クリック</b>＝担当者変更。
-  <b>＋マネージャー追加</b>で新任エリアを新規作成。
+  <b>＋マネージャー追加</b>で新任エリアを新規作成。<b>🔍社員リストと照合</b>で、社員リスト（.xlsx）を読み込んで幽霊社員・配置漏れをチェック。
   <b>保存は「配置表を出力」→ 次回「配置表を取込」で続き。</b> 赤枠＝店主未定。</div></div>
   <div class="stats" id="stats"></div>
   <div id="board"></div>
@@ -695,6 +717,162 @@ document.getElementById('importFile').addEventListener('change',ev=>{
   };
   rd.readAsArrayBuffer(f);
 });
+
+// ===== 社員リストと照合 =====
+// 名前正規化（過去の照合と同じ方針）
+function _hk(s){return String(s||'').split('').map(c=>('\u3041'<=c&&c<='\u3096')?String.fromCharCode(c.charCodeAt(0)+0x60):c).join('');}
+function _norm(s){
+  s=(s==null?'':String(s)).normalize('NFKC');
+  return _hk(s).replace(/[\s\u3000・]/g,'');
+}
+const _SMALL={'ァ':'ア','ィ':'イ','ゥ':'ウ','ェ':'エ','ォ':'オ','ッ':'ツ','ャ':'ヤ','ュ':'ユ','ョ':'ヨ','ヮ':'ワ','ヵ':'カ','ヶ':'ケ'};
+function _kn(s){return _norm(s).split('').map(c=>_SMALL[c]||c).join('').replace(/[ー―]/g,'').replace(/ヴ/g,'ブ');}
+function _lev(a,b,cap){
+  if(Math.abs(a.length-b.length)>cap)return cap+1;
+  let prev=[...Array(b.length+1).keys()];
+  for(let i=1;i<=a.length;i++){let cur=[i],mn=i;
+    for(let j=1;j<=b.length;j++){const v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]!==b[j-1]?1:0));cur.push(v);if(v<mn)mn=v;}
+    if(mn>cap)return cap+1;prev=cur;}
+  return prev[b.length];
+}
+const AREA_RE=/(佐藤洋行|鈴木涼太|チュン|リュウ|花井|渡部|フオン|佐藤覚也)エリア/;
+
+document.getElementById('checkFile').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      // 社員リストのメインシートを探す（名前・所属・エリア列を持つ）
+      let ws=wb.Sheets['電話番号・メールアドレス'];
+      if(!ws){ // フォールバック：最初に「名前」列があるシート
+        for(const nm of wb.SheetNames){
+          const t=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,defval:''});
+          if(t[0] && t[0].some(c=>String(c).includes('名前'))){ ws=wb.Sheets[nm]; break; }
+        }
+      }
+      if(!ws){ alert('社員リストのシートが見つかりません。「社員リスト.xlsx」を選んでください。'); ev.target.value=''; return; }
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // ヘッダ行と列位置
+      let hi=rows.findIndex(r=>r.some(c=>String(c)==='名前'));
+      if(hi<0)hi=0;
+      const H=rows[hi].map(x=>String(x));
+      const ci=n=>H.indexOf(n);
+      const cID=0, cName=ci('名前')<0?1:ci('名前'), cDept=ci('所属'), cArea=ci('エリア'), cNick=ci('呼び名・苗字');
+      // 社員リストを読む
+      const roster=[]; 
+      for(let i=hi+1;i<rows.length;i++){
+        const r=rows[i]; const name=String(r[cName]||'').trim();
+        if(!name)continue;
+        const idRaw=String(r[cID]||'').trim().replace(/\.0$/,'');
+        const area=cArea>=0?String(r[cArea]||'').trim():'';
+        const dept=cDept>=0?String(r[cDept]||'').trim():'';
+        const nick=cNick>=0?String(r[cNick]||'').trim():'';
+        roster.push({id:idRaw,name,area,dept,nick,
+          _n:_norm(name),_k:_kn(name),_nick:_norm(nick)});
+      }
+      if(roster.length===0){ alert('社員リストのデータが読めませんでした。'); ev.target.value=''; return; }
+      runCheck(roster);
+    }catch(err){ alert('照合に失敗しました：'+err.message); }
+    ev.target.value='';
+  };
+  rd.readAsArrayBuffer(f);
+});
+
+function findInRoster(nm,roster){
+  const n=_norm(nm), k=_kn(nm);
+  let c=roster.filter(e=>e._n===n); if(c.length===1)return c[0];
+  c=roster.filter(e=>e._k===k); if(c.length===1)return c[0];
+  c=roster.filter(e=>e._nick&&e._nick===n); if(c.length===1)return c[0];
+  if(n.length>=3){ c=roster.filter(e=>e._n.includes(n)||n.includes(e._n)); if(c.length===1)return c[0]; }
+  if(k.length>=4){ const cap=k.length<7?1:2; c=roster.filter(e=>_lev(k,e._k,cap)<=cap); if(c.length===1)return c[0]; }
+  return null;
+}
+
+function runCheck(roster){
+  // 店舗社員（エリア配属）と要確認を分ける
+  const storeStaff=roster.filter(e=>AREA_RE.test(e.area));
+  const youkakunin=roster.filter(e=>e.area==='要確認'||e.dept==='要確認');
+  const rosterById={}; roster.forEach(e=>{if(e.id)rosterById[e.id]=e;});
+
+  // 配置ツール側：通常セクションの実店舗のみ
+  const plPeople=[];
+  stores.forEach(s=>{ if(s.section!=='通常'||s._placeholder)return;
+    s.members.forEach(m=>plPeople.push({name:m.name,empid:(m.empid||'').replace(/\.0$/,''),store:s.store,pos:m.pos}));
+  });
+  const plIds=new Set(plPeople.filter(p=>p.empid).map(p=>p.empid));
+
+  // チェック1：配置表にいるが社員リストで確認できない（幽霊）
+  const ghost=[];
+  plPeople.forEach(p=>{
+    let ok=false;
+    if(p.empid && rosterById[p.empid]) ok=true;
+    else if(findInRoster(p.name,roster)) ok=true;
+    if(!ok) ghost.push(p);
+  });
+
+  // チェック2：エリア配属なのに配置表にいない（配置漏れ）
+  const missing=[];
+  storeStaff.forEach(e=>{
+    const inById = e.id && plIds.has(e.id);
+    const inByName = plPeople.some(p=>_norm(p.name)===e._n||_kn(p.name)===e._k);
+    if(!inById && !inByName){
+      const am=e.area.match(AREA_RE);
+      const isNew=/2026\/0?[67]/.test(e.dept)||false; // 参考
+      missing.push({...e, areaShort: am?am[0]:e.area});
+    }
+  });
+
+  showCheckResult({ghost,missing,youkakunin,storeCount:storeStaff.length,plCount:plPeople.length});
+}
+
+function showCheckResult(res){
+  const {ghost,missing,youkakunin,storeCount,plCount}=res;
+  modalEl.parentElement.querySelector('.modal').classList.add('wide');
+  let html=`<h3>🔍 社員リストとの照合結果</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">配置表の店舗配置 ${plCount}人 ／ 社員リストのエリア配属 ${storeCount}人</div>
+    <div class="check-summary">
+      <div class="check-card ${ghost.length?'warn':'ok'}"><div class="cn">${ghost.length}</div><div class="cl">リスト未確認<br>（幽霊の疑い）</div></div>
+      <div class="check-card ${missing.length?'warn':'ok'}"><div class="cn">${missing.length}</div><div class="cl">配置漏れ<br>（未配置）</div></div>
+      <div class="check-card info"><div class="cn">${youkakunin.length}</div><div class="cl">要確認<br>（未配属）</div></div>
+    </div>`;
+
+  // チェック1
+  html+=`<div class="check-section"><h4>⚠ 配置表にいるが社員リストで確認できない</h4>`;
+  if(ghost.length){
+    html+=`<div class="check-list">`+ghost.map(g=>
+      `<div class="check-row"><span class="badge eid">${g.empid||'—'}</span>
+        <span>${esc(g.name)}</span><span class="r-area">${esc(g.store)}</span></div>`).join('')+`</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px">→ 退職済み・リスト未登録の可能性。確認してください。</div>`;
+  }else{ html+=`<div class="check-none">✓ 全員リストで確認できました</div>`; }
+  html+=`</div>`;
+
+  // チェック2
+  html+=`<div class="check-section"><h4>⚠ エリア配属なのに配置表にいない（配置漏れ）</h4>`;
+  if(missing.length){
+    html+=`<div class="check-list">`+missing.map(mm=>
+      `<div class="check-row"><span class="badge eid">${mm.id||'—'}</span>
+        <span>${esc(mm.name)}</span><span class="r-area">${esc(mm.areaShort)}</span></div>`).join('')+`</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px">→ 新入社員や異動直後の可能性。配置表への追加が必要です。</div>`;
+  }else{ html+=`<div class="check-none">✓ 配置漏れはありません</div>`; }
+  html+=`</div>`;
+
+  // 要確認（参考）
+  if(youkakunin.length){
+    html+=`<div class="check-section"><h4>📋 要確認の人（参考・未配属の可能性）</h4>
+      <div class="check-list">`+youkakunin.map(y=>
+      `<div class="check-row"><span class="badge eid">${y.id||'—'}</span>
+        <span>${esc(y.name)}</span><span class="r-area">要確認</span></div>`).join('')+`</div></div>`;
+  }
+
+  html+=`<div class="modal-btns"><button class="btn" id="ck_close">閉じる</button></div>`;
+  modalEl.innerHTML=html;
+  modalBg.classList.add('show');
+  document.getElementById('ck_close').onclick=()=>{
+    modalEl.parentElement.querySelector('.modal').classList.remove('wide');
+    closeModal();
+  };
+}
 
 render();
 </script>
